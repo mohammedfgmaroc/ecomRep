@@ -11,7 +11,7 @@
                 <h4>{{ item.book.title }}</h4>
                 <p>Quantity: {{ item.quantity }}</p>
                 <p>Price per item: ${{ item.book.price }}</p>
-                <p>Total for this item: ${{ item.book.price|floatformat:2 }} </p>
+
                 <hr>
                 {% endfor %}
                 <h4>Total: ${{ total_amount|floatformat:2 }}</h4>

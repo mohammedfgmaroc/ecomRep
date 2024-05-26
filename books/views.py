@@ -1,4 +1,4 @@
-from pyexpat.errors import messages
+from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views import View
@@ -128,14 +128,14 @@ def delete_book(request, pk):
 class BookCheckoutView(LoginRequiredMixin, View):
     login_url = 'login'
     template_name = 'checkout.html'
-
+    
     def post(self, request):
         selected_items = request.POST.getlist('selected_items')
 
         if not selected_items:
             messages.error(request, "No items selected for checkout.")
             return redirect('cart_detail')
-        
+
         cart_items = CartItem.objects.filter(id__in=selected_items, cart__user=request.user)
 
         if not cart_items:
@@ -143,14 +143,12 @@ class BookCheckoutView(LoginRequiredMixin, View):
             return redirect('cart_detail')
         
         total = sum(item.book.price * item.quantity for item in cart_items)
-        
+
         order = Order.objects.create()  # Create the order
         for item in cart_items:
             OrderItem.objects.create(order=order, book=item.book, quantity=item.quantity)
+            
 
-        # Clear the cart items after successful order creation
-        cart_items.delete()
-        
         context = {
             'order': order,
             'total_amount': total,
@@ -171,6 +169,7 @@ class BookCheckoutView(LoginRequiredMixin, View):
             'total_amount': total,
         }
         return render(request, self.template_name, context)
+
 
 
 
@@ -195,6 +194,16 @@ def process_payment(request):
             if payment_success:
                 print("Payment successful!")  # Debug print statement
                 
+                # Get the selected items from the cart
+                selected_items = request.POST.getlist('selected_items')
+                
+                # Retrieve the cart items
+                cart_items = CartItem.objects.filter(id__in=selected_items, cart__user=request.user)
+                
+                # Delete each cart item
+                for item in cart_items:
+                    item.delete()
+
                 # Return a success response with a message
                 # Redirect to the list page after successful payment
                 return redirect('list')
@@ -209,7 +218,6 @@ def process_payment(request):
 
     # Return an error response if request method is not POST
     return JsonResponse({'error': 'Invalid request method'}, status=405)
-
 def paymentComplete(request):
     body = json.loads(request.body)
     print('BODY:', body)
@@ -228,21 +236,29 @@ def cart_detail(request):
         items = []
     return render(request, 'cart/cart_detail.html', {'cart_items': items})
 
+@login_required
+@csrf_exempt
 def cart_item_update(request, item_id):
-    cart_item = get_object_or_404(CartItem, id=item_id)
-    quantity = request.POST.get('quantity', 1)
-    if int(quantity) <= 0:
-        cart_item.delete()  # Remove item if quantity less than or equal to 0
-    else:
-        cart_item.quantity = int(quantity)
-        cart_item.save()
-    return redirect('cart_detail')
+    if request.method == 'POST':
+        item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
+        quantity = int(request.POST.get('quantity', 1))
+        item.quantity = quantity
+        item.save()
+        return JsonResponse({'success': True})
+    return JsonResponse({'success': False}, status=400)
 
 @login_required
+@csrf_exempt
 def cart_item_delete(request, item_id):
-    cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)  # Ensures the item belongs to the user's cart
-    cart_item.delete()
-    return redirect('cart_detail')
+    if request.method == 'POST':
+        try:
+            cart_item = CartItem.objects.get(id=item_id, cart__user=request.user)
+            cart_item.delete()
+            return redirect('cart_detail')
+        except CartItem.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Cart item not found'}, status=404)
+    else:
+        return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
 
 @login_required
 def add_to_cart(request, book_id):

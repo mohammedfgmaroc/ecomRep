@@ -4,7 +4,7 @@
   <div class="container mt-4">
     <h2>Your Cart</h2>
     {% if cart_items %}
-      <form action="{% url 'cart_checkout' %}" method="post">
+      <form action="{% url 'cart_checkout' %}" method="post" id="checkout-form">
         {% csrf_token %}
         <table class="table">
           <thead>
@@ -24,11 +24,8 @@
                 <td>{{ item.book.title }}</td>
                 <td>${{ item.book.price|floatformat:2 }}</td>
                 <td>
-                  <form action="{% url 'cart_item_update' item.id %}" method="post" class="d-inline">
-                    {% csrf_token %}
-                    <input type="number" name="quantity" value="{{ item.quantity }}" min="1" class="form-control">
-                    <button type="submit" class="btn btn-info btn-sm mt-2">Update</button>
-                  </form>
+                  <input type="number" name="quantity" value="{{ item.quantity }}" min="1" class="form-control quantity-input" data-item-id="{{ item.id }}">
+                  <button type="button" class="btn btn-info btn-sm mt-2 update-quantity-btn" data-item-id="{{ item.id }}">Update</button>
                 </td>
                 <td>${{ item.total_price|floatformat:2 }}</td>
                 <td>
@@ -49,4 +46,39 @@
       <p>Your cart is empty.</p>
     {% endif %}
   </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var updateButtons = document.querySelectorAll('.update-quantity-btn');
+
+      updateButtons.forEach(function (button) {
+        button.addEventListener('click', function () {
+          var itemId = this.getAttribute('data-item-id');
+          var quantityInput = document.querySelector('.quantity-input[data-item-id="' + itemId + '"]');
+          var quantity = quantityInput.value;
+
+          var formData = new FormData();
+          formData.append('quantity', quantity);
+          formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+          fetch("{% url 'cart_item_update' 0 %}".replace('0', itemId), {
+            method: 'POST',
+            body: formData
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              location.reload();
+            } else {
+              alert('Failed to update quantity.');
+            }
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to update quantity.');
+          });
+        });
+      });
+    });
+  </script>
 {% endblock %}
